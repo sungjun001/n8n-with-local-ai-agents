@@ -1,0 +1,63 @@
+networks:
+  n8n-v2-network:
+    external: true
+    name: n8n-v2_n8n-v2-network
+
+services:
+  claude-server:
+    restart: always
+    container_name: claude-ssh-server
+    build:
+      context: .
+      args:
+        SSH_USER: ${BRIDGE_SSH_USER} # .env에서 가져옴
+        SSH_PASS: ${BRIDGE_SSH_PASS} # .env에서 가져옴
+    ports:
+      - "13010:22"
+    volumes:
+      - ./claude-config:/home/claudeuser/
+      - ../n8n-v2/download:/workspace
+    environment:
+      - ANTHROPIC_BASE_URL=http://claude-code-monitor:3001
+      - NANOBANANA_GEMINI_API_KEY=${NANOBANANA_GEMINI_API_KEY}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=${MINIO_BUCKET:-images}
+    networks:
+      - n8n-v2-network
+
+  claude-code-monitor:
+    build: ./claude-code-monitor
+    restart: always
+    container_name: claude-code-monitor
+    ports:
+      - "127.0.0.1:13011:3001"
+      - "127.0.0.1:13012:5173"
+    volumes:
+      - ./proxy-data:/app/data
+      - ./claude-code-monitor/config.yaml:/app/config.yaml:ro
+    environment:
+      - ANTHROPIC_FORWARD_URL=https://api.anthropic.com
+      - PORT=3001
+      - WEB_PORT=5173
+      - DB_PATH=/app/data/requests.db
+
+    networks:
+      - n8n-v2-network
+
+  # Claude API Bridge Server
+  claude-bridge:
+    build: ./claude-bridge
+    container_name: claude-bridge
+    restart: always
+    volumes:
+      - ./claude-bridge/logs:/app/logs
+    networks:
+      - n8n-v2-network # 반드시 n8n과 같은 네트워크여야 함
+    depends_on:
+      - claude-server # SSH 서버가 켜진 뒤에 실행
+    environment:
+      - SSH_HOST=${BRIDGE_SSH_HOST} # 왼쪽: Python이 읽을 변수 / 오른쪽: .env 값
+      - SSH_USER=${BRIDGE_SSH_USER}
+      - SSH_PASS=${BRIDGE_SSH_PASS}
+      - CLAUDE_MONITOR_URL=${CLAUDE_MONITOR_URL}

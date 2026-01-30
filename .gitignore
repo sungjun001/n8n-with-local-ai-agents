@@ -1,0 +1,29 @@
+# Environment Variables
+.env
+**/.env
+
+# Logs
+*.log
+log.txt
+claude-docker/claude-bridge/logs/
+
+# Large Files
+n8n.zip
+
+# Runtime Data & State
+n8n-v2/n8n-v2-data/
+n8n-v2/postgres-v2-data/
+minio-storage/minio_data/
+claude-docker/proxy-data/
+claude-docker/claude-config/
+
+# Web Server / Proxy Data
+nginx-proxy/certs/
+nginx-proxy/vhost/
+nginx-proxy/html/
+nginx-proxy/acme/
+traefik-proxy/letsencrypt/
+
+# OS Metadata
+.DS_Store
+Thumbs.db

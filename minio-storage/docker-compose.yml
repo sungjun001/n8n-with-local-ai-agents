@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: local-minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ./minio_data:/data
+    networks:
+      - n8n-v2-network # Internal access for agents
+      - web # External access via Proxy
+    expose:
+      - "9000"
+      - "9001"
+
+  # Optional: Auto-create buckets
+  create-buckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=${MINIO_BUCKET}
+    volumes:
+      - ./create-buckets.sh:/create-buckets.sh
+    entrypoint: [ "/bin/sh", "/create-buckets.sh" ]
+    networks:
+      - n8n-v2-network
+
+networks:
+  n8n-v2-network:
+    external: true
+    name: n8n-v2_n8n-v2-network
+  web:
+    external: true

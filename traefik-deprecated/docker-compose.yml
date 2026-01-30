@@ -1,0 +1,48 @@
+networks:
+  web:          # Traefik ↔ 서비스 간 HTTP 트래픽용
+    external: true
+
+services:
+  web-traefik:
+    image: traefik:v3.3   # GA 최신 버전
+    container_name: web-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"           # 웹 → EntryPoint web
+      - "443:443"         # 웹 → EntryPoint websecure
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # 컨테이너 자동 탐지
+      - ./traefik-config/acme.json:/acme.json
+      - ./traefik-logs:/logs
+    command:                         # ↙ 정적 설정을 CLI 플래그로
+      - --providers.docker
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=web
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.transport.respondingTimeouts.readTimeout=120s
+
+        # - --entrypoints.ica-pgdb.address=:5432
+      - --entrypoints.websecure.forwardedHeaders.trustedIPs=172.16.0.0/12,192.168.0.0/16,10.0.0.0/8,127.0.0.1/32,172.20.0.0/16 # Docker 네트워크 및 기타 프록시에 맞게 이 범위를 조정하세요
+
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.email=${LE_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/acme.json
+      - --api.dashboard=true
+      - --log.level=DEBUG
+      - --accesslog=true
+      - --accesslog.filepath=/logs/access.log
+      - --accesslog.fields.headers.defaultmode=keep
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`dev-traefik.codersapi.com`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=le"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      # (선택) 인증 미들웨어 추가 권장
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$1$$dXJx/...$$s9AIaZ.AQjJT5DjWTcuXP."
+      - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth"   
+    networks:
+      - web
+
