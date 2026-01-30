@@ -9,6 +9,25 @@ services:
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+
+      # --- [Option A] Nginx Proxy (Active) ---
+      - VIRTUAL_HOST=${MINIO_ENDPOINT:-s3.yourdomain.com}
+      - VIRTUAL_PORT=9000
+      - LETSENCRYPT_HOST=${MINIO_ENDPOINT:-s3.yourdomain.com}
+
+    labels:
+      # --- [Option B] Traefik Proxy (Disabled by default) ---
+      # To enable: Uncomment lines below AND set enable=true (ONLY if using Traefik)
+      - "traefik.enable=false" # Change to true ONLY if using Traefik
+      # [1] API Service (9000)
+      - "traefik.http.routers.minio-api.rule=Host(`${MINIO_ENDPOINT:-s3.yourdomain.com}`)"
+      - "traefik.http.routers.minio-api.entrypoints=websecure"
+      - "traefik.http.routers.minio-api.tls.certresolver=le"
+      - "traefik.http.routers.minio-api.service=minio-api"
+      - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
+      # [2] Console (9001) - Optional
+      # - "traefik.http.routers.minio-console.rule=Host(`minio.${DOMAIN}`)"
+      # - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
     volumes:
       - ./minio_data:/data
     networks:

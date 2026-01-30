@@ -31,49 +31,52 @@ This project integrates **n8n** (Automation) with **Local AI Agents** (Gemini CL
 
 ## ⚡ Getting Started
 
-### 1. Network Setup
-Create the required external networks:
-```bash
-docker network create n8n-v2-network
-docker network create web
-```
+1.  **Network Setup**
+    Create the required external networks:
+    ```bash
+    docker network create n8n-v2-network
+    docker network create web
+    ```
 
-### 2. Reverse Proxy Setup (Choose One)
-**Option A: Nginx (Recommended)**
-```bash
-cd nginx-proxy
-cp .env.example .env  # Set your email
-docker-compose up -d
-```
+2.  **Reverse Proxy Setup (Choose One)**
+    > 📘 **Detailed Guide**: See [PROXY_GUIDE.md](./PROXY_GUIDE.md) for advanced configuration.
 
-**Option B: Traefik**
-```bash
-cd traefik-proxy
-cp .env.example .env
-docker-compose up -d
-```
+    **Option A: Nginx (Recommended)**
 
-### 3. Start MinIO Storage (Optional)
-If you don't have an external S3 provider, run this local instance.
-```bash
-cd minio-storage
-cp .env.example .env
-docker-compose up -d
-```
+    ```bash
+    cd nginx-proxy
+    cp .env.example .env  # Set your email
+    docker-compose up -d
+    ```
 
-### 4. Start AI Agent Infrastructure
-```bash
-cd claude-docker
-cp .env.example .env
-# Edit .env with your specific configuration (API Keys, MinIO Credentials)
-docker-compose up -d
-```
+    **Option B: Traefik**
+    ```bash
+    cd traefik-proxy
+    cp .env.example .env
+    docker-compose up -d
+    ```
 
-### 4. Start n8n
-```bash
-cd n8n-v2
-docker-compose up -d
-```
+3.  **Start MinIO Storage (Optional)**
+    If you don't have an external S3 provider, run this local instance.
+    ```bash
+    cd minio-storage
+    cp .env.example .env
+    docker-compose up -d
+    ```
+
+4.  **Start AI Agent Infrastructure**
+    ```bash
+    cd claude-docker
+    cp .env.example .env
+    # Edit .env with your specific configuration (API Keys, MinIO Credentials)
+    docker-compose up -d
+    ```
+
+5.  **Start n8n**
+    ```bash
+    cd n8n-v2
+    docker-compose up -d
+    ```
 
 ## 🤖 Usage Guide for Agents (Gemini CLI)
 

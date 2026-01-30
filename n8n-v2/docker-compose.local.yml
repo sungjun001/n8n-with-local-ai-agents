@@ -1,7 +1,8 @@
 networks:
   n8n-v2-network:
     driver: bridge
-  web:          # Traefik ↔ 서비스 간 HTTP 트래픽용
+  web:
+    # Traefik ↔ 서비스 간 HTTP 트래픽용
     external: true
 
 services:
@@ -25,7 +26,7 @@ services:
       - DB_POSTGRESDB_USER=${POSTGRES_USER}
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_POSTGRESDB_SCHEMA=public
-      
+
       # --- n8n 기본 설정 ---
       - N8N_HOST=${DOMAIN}
       - WEBHOOK_URL=http://${DOMAIN}/
@@ -33,13 +34,13 @@ services:
       - TZ=Asia/Seoul
       - N8N_SECURE_COOKIE=false
       - N8N_PUSH_BACKEND=sse
-      
+
       # --- Runner 설정 ---
       - N8N_RUNNERS_ENABLED=true
       - N8N_RUNNERS_MODE=external
       - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
       - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNER_SECRET}
-      
+
       # --- 기타 설정 ---
       - N8N_PROXY_HOPS=1
       - N8N_ALLOW_EXECUTE_COMMAND=true
@@ -48,12 +49,20 @@ services:
       - NODES_EXCLUDE=[]
 
       - N8N_FILESYSTEM_PATH_WHITELIST=/download
-      
-      # --- Nginx Proxy 설정 ---
+
+      # --- [Option A] Nginx Proxy (Active) ---
       - VIRTUAL_HOST=${DOMAIN}
       - VIRTUAL_PORT=5678
-      # - LETSENCRYPT_HOST=${DOMAIN}
-      # - LETSENCRYPT_EMAIL=${LE_EMAIL}
+      - LETSENCRYPT_HOST=${DOMAIN}
+
+    labels:
+      # --- [Option B] Traefik Proxy (Disabled by default) ---
+      # To enable: Uncomment lines below and Comment out 'Nginx Proxy' env vars above
+      - "traefik.enable=false" # Change to true ONLY if using Traefik
+      - "traefik.http.routers.n8n.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.tls.certresolver=le"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
 
     depends_on:
       - n8n-v2-postgres
@@ -63,7 +72,7 @@ services:
       - n8n-v2-network
 
   n8n-v2-task-runner:
-    build: ./runner-python  # 아까 만든 Python용 Dockerfile 경로
+    build: ./runner-python # 아까 만든 Python용 Dockerfile 경로
     container_name: n8n-v2-task-runner
     restart: unless-stopped
     environment:
@@ -87,7 +96,7 @@ services:
       # 비루트 계정을 자동 생성하려면 bitnami/postgresql 같은 이미지를 사용하거나
       # 초기화 스크립트를 마련하세요.
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}" , "-d" , "${POSTGRES_DB}"]
+      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}" ]
       interval: 10s
       retries: 5
       start_period: 5s

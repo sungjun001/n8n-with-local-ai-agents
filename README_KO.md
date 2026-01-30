@@ -31,49 +31,52 @@
 
 ## ⚡ 시작하기 (Getting Started)
 
-### 1. 네트워크 설정
-필요한 외부 네트워크를 먼저 생성합니다:
-```bash
-docker network create n8n-v2-network
-docker network create web
-```
+1.  **네트워크 생성 (Network Setup)**
+    모든 컨테이너가 통신할 수 있도록 외부 네트워크를 생성합니다.
+    ```bash
+    docker network create n8n-v2-network
+    docker network create web
+    ```
 
-### 2. 리버스 프록시 설정 (택 1)
-**옵션 A: Nginx (추천 - 간편함)**
-```bash
-cd nginx-proxy
-cp .env.example .env  # 이메일 설정 필요
-docker-compose up -d
-```
+2.  **리버스 프록시 설정 (택 1)**
+    > 📘 **상세 가이드**: [PROXY_GUIDE_KO.md](./PROXY_GUIDE_KO.md)에서 환경 변수 및 전환 방법을 확인하세요.
 
-**옵션 B: Traefik**
-```bash
-cd traefik-proxy
-cp .env.example .env
-docker-compose up -d
-```
+    **옵션 A: Nginx (추천 - 간편함)**
 
-### 3. MinIO 스토리지 시작 (선택 사항)
-외부 S3 제공자가 없다면 이 로컬 인스턴스를 실행하세요.
-```bash
-cd minio-storage
-cp .env.example .env
-docker-compose up -d
-```
+    ```bash
+    cd nginx-proxy
+    cp .env.example .env  # 이메일 설정 필요
+    docker-compose up -d
+    ```
 
-### 4. AI 에이전트 인프라 시작
-```bash
-cd claude-docker
-cp .env.example .env
-# .env 파일을 열어 API Key, MinIO 자격 증명 등을 설정하세요.
-docker-compose up -d
-```
+    **옵션 B: Traefik**
+    ```bash
+    cd traefik-proxy
+    cp .env.example .env
+    docker-compose up -d
+    ```
 
-### 4. n8n 시작
-```bash
-cd n8n-v2
-docker-compose up -d
-```
+3.  **MinIO 스토리지 시작 (선택 사항)**
+    외부 S3 제공자가 없다면 이 로컬 인스턴스를 실행하세요.
+    ```bash
+    cd minio-storage
+    cp .env.example .env
+    docker-compose up -d
+    ```
+
+4.  **AI 에이전트 인프라 시작**
+    ```bash
+    cd claude-docker
+    cp .env.example .env
+    # .env 파일을 열어 API Key, MinIO 자격 증명 등을 설정하세요.
+    docker-compose up -d
+    ```
+
+5.  **n8n 시작**
+    ```bash
+    cd n8n-v2
+    docker-compose up -d
+    ```
 
 ## 🤖 에이전트 사용 가이드 (Gemini CLI)
 
