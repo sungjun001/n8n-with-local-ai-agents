@@ -17,12 +17,17 @@ services:
     volumes:
       - ./claude-config:/home/claudeuser/
       - ../n8n-v2/download:/workspace
+      # [Dev] 스크립트 수정 시 빌드 없이 적용되도록 볼륨 마운트
+      - ./docker-entrypoint.sh:/usr/local/bin/docker-entrypoint.sh
+    # [Fix] 윈도우 볼륨 마운트 권한 문제 우회 + SSH 서버 실행 인자 전달
+    entrypoint: [ "/bin/bash", "/usr/local/bin/docker-entrypoint.sh", "/usr/sbin/sshd", "-D" ]
     environment:
       - ANTHROPIC_BASE_URL=http://claude-code-monitor:3001
       - NANOBANANA_GEMINI_API_KEY=${NANOBANANA_GEMINI_API_KEY}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET=${MINIO_BUCKET:-images}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
     networks:
       - n8n-v2-network
 
@@ -52,6 +57,8 @@ services:
     restart: always
     volumes:
       - ./claude-bridge/logs:/app/logs
+      # [Dev] Python 코드 수정 시 빌드 없이 적용되도록 볼륨 마운트
+      - ./claude-bridge/src/main.py:/app/main.py
     networks:
       - n8n-v2-network # 반드시 n8n과 같은 네트워크여야 함
     depends_on:

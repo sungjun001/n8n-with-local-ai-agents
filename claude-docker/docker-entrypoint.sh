@@ -14,16 +14,23 @@ chown $USER_NAME:$USER_NAME /workspace
 # 시스템 전역 환경변수 설정
 echo "🔑 Setting up environment variables..."
 {
-    grep -v "GEMINI_API_KEY\|ANTHROPIC_BASE_URL\|MINIO_\|AWS_" /etc/environment 2>/dev/null || true
+    grep -v "GEMINI_API_KEY\|ANTHROPIC_BASE_URL\|MINIO_\|AWS_\|STITCH_" /etc/environment 2>/dev/null || true
     [ -n "$NANOBANANA_GEMINI_API_KEY" ] && echo "GEMINI_API_KEY=\"$NANOBANANA_GEMINI_API_KEY\""
+    [ -n "$STITCH_API_KEY" ] && echo "STITCH_API_KEY=\"$STITCH_API_KEY\""
     [ -n "$ANTHROPIC_BASE_URL" ] && echo "ANTHROPIC_BASE_URL=\"$ANTHROPIC_BASE_URL\""
     [ -n "$MINIO_ACCESS_KEY" ] && echo "AWS_ACCESS_KEY_ID=\"$MINIO_ACCESS_KEY\""
     [ -n "$MINIO_SECRET_KEY" ] && echo "AWS_SECRET_ACCESS_KEY=\"$MINIO_SECRET_KEY\""
     [ -n "$MINIO_BUCKET" ] && echo "MINIO_BUCKET=\"$MINIO_BUCKET\""
+    
+    # [Fix] 멀티 버킷("a,b,c")일 경우 첫 번째 버킷("a")만 추출해서 기본값으로 사용
+    # 쉼표로 구분된 문자열에서 첫 번째 요소만 가져옴
+    PRIMARY_BUCKET=$(echo "${MINIO_BUCKET:-images}" | cut -d',' -f1)
+    
     # MINIO_ENDPOINT가 있으면 사용하고 없으면 기본값 사용
     ENDPOINT="${MINIO_ENDPOINT:-s3.yourdomain.com}"
     echo "AWS_ENDPOINT_URL=\"https://$ENDPOINT\""
     echo "MINIO_ENDPOINT=\"$ENDPOINT\""
+    echo "PRIMARY_BUCKET=\"$PRIMARY_BUCKET\""
 } > /tmp/environment && mv /tmp/environment /etc/environment
 
 # .bashrc 설정
@@ -57,23 +64,33 @@ cat > "$CONTEXT_FILE" << EOF
 - **Fallback Method**: Use shell command \`mc\` (MinIO Client).
     - Status: \`mc\` is installed and the alias **\`myminio\`** (or \`minio\`) is PRE-CONFIGURED.
     - **IMPORTANT**: Do NOT try to read \`~/.bashrc\` or \`~/.mc/config.json\`. Just run the command.
-    - Example: \`mc cp /workspace/file.png myminio/${MINIO_BUCKET:-images}/\`
+    - **Upload Path Convention**: Always use \`images/YYYYMMDD/filename\` pattern.
+    - Example: \`mc cp /workspace/file.png myminio/${PRIMARY_BUCKET:-images}/images/$(date +%Y%m%d)/\`.
     - Endpoint: https://${MINIO_ENDPOINT:-s3.yourdomain.com}
 
 ### 2. File System
 - Current working directory: \`/workspace\`
 - **Constraint**: You are sandboxed to \`/workspace\`. Do not try to read files in \`~\` or \`/home/claudeuser\`.
 
-### 3. OUTPUT FORMAT PROTOCOL
+### 3. PROTOCOL: IMAGE GENERATION & UPLOAD (STRICT)
+**WARNING**: You often forget to upload the file. Follow these steps exactly:
+
+1.  **GENERATE**: Use \`generate_image\` to create the file locally.
+2.  **UPLOAD (CRITICAL)**: You **MUST** run a command to upload the file to MinIO.
+    - Use \`mc cp /workspace/file.png myminio/${PRIMARY_BUCKET:-images}/images/$(date +%Y%m%d)/\`.
+    - OR use the S3 MCP tool if available.
+    - **IF YOU SKIP THIS, THE USER WILL SEE A BROKEN IMAGE.**
+3.  **VERIFY**: Run \`mc ls myminio/${PRIMARY_BUCKET:-images}/images/$(date +%Y%m%d)/\` to confirm it exists.
+4.  **RESPOND**: Only AFTER uploading, return the JSON.
+
+### 4. OUTPUT FORMAT PROTOCOL
 **CASE A: File/Image Generation (Strict JSON)**
-- If you have generated, edited, or uploaded files:
-  - You **MUST** return a **RAW JSON BLOCK** so the system can process the URLs.
-  - **NO** conversational filler.
-  - Structure:
+- **Prerequisite**: Did you actually upload the file? (See PROTOCOL above)
+- Structure:
     \`\`\`json
     {
       "local_path": "/workspace/file.png",
-      "s3_url": "https://${MINIO_ENDPOINT:-s3.yourdomain.com}/${MINIO_BUCKET:-images}/file.png"
+      "s3_url": "https://${MINIO_ENDPOINT:-s3.yourdomain.com}/${PRIMARY_BUCKET:-images}/images/$(date +%Y%m%d)/file.png"
     }
     \`\`\`
 
@@ -121,6 +138,26 @@ EOF
 
 chown -R $USER_NAME:$USER_NAME "$GEMINI_DIR"
 echo "✅ Gemini MCP configured"
+
+# Stitch Extension & MCP Setup
+echo "🔧 Configuring Stitch Integration..."
+
+# 1. Gemini Extension
+echo "   Installing Gemini Stitch extension..."
+su - $USER_NAME -c "gemini extensions install https://github.com/gemini-cli-extensions/stitch" || echo "⚠️ Failed to install Gemini Stitch extension (non-fatal)"
+
+# 2. Claude Code MCP
+# Fallback logic: STITCH_API_KEY -> NANOBANANA_GEMINI_API_KEY
+TARGET_STITCH_KEY="${STITCH_API_KEY:-$NANOBANANA_GEMINI_API_KEY}"
+
+if [ -n "$TARGET_STITCH_KEY" ]; then
+    echo "   Installing Claude Stitch MCP..."
+    # Escape key just in case
+    SAFE_KEY=$(printf %q "$TARGET_STITCH_KEY")
+    su - $USER_NAME -c "claude mcp add stitch --transport http https://stitch.googleapis.com/mcp --header \"X-Goog-Api-Key: $SAFE_KEY\" -s user" || echo "⚠️ Failed to add Stitch MCP to Claude (non-fatal)"
+else
+    echo "⚠️ Skipping Claude Stitch MCP: No API Key available"
+fi
 
 # MinIO Client (mc) 설정
 if command -v mc >/dev/null 2>&1; then

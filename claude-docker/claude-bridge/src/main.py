@@ -136,6 +136,7 @@ SUPPORTED_MODELS: List[str] = []
 MODEL_MAPPING: Dict[str, Tuple[str, str]] = {}
 
 
+
 def get_ssh_base_cmd() -> List[str]:
     """SSH 기본 명령어 생성"""
     return [
@@ -144,6 +145,44 @@ def get_ssh_base_cmd() -> List[str]:
         "-o", "ConnectTimeout=5",
         f"{SSH_USER}@{SSH_HOST}"
     ]
+
+
+def log_remote_execution(session_dir: str, command: str, return_code: int, stdout: str, stderr: str):
+    """원격 workspace/logs 디렉토리에 실행 로그 중앙 저장"""
+    try:
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 로그 저장할 중앙 디렉토리
+        target_log_dir = "/workspace/logs"
+        
+        log_content = f"""
+[{timestamp}] Command Execution
+Session: {session_dir}
+==================================================
+CMD: {command}
+EXIT: {return_code}
+STDOUT:
+{stdout}
+STDERR:
+{stderr}
+==================================================
+"""
+        ssh_base = get_ssh_base_cmd()
+        
+        # 1. logs 디렉토리 생성 (없으면 생성)
+        mkdir_cmd = ssh_base + [f'mkdir -p "{target_log_dir}"']
+        subprocess.run(mkdir_cmd, capture_output=True, text=True, timeout=5)
+        
+        # 2. 중앙 로그 파일에 추가
+        write_cmd = ssh_base + [f'cat >> "{target_log_dir}/execution.log"']
+        
+        # 로그 저장 실행
+        subprocess.run(write_cmd, input=log_content, text=True, timeout=5)
+        
+    except Exception as e:
+        logger.warning(f"   ⚠️ Failed to write remote log: {e}")
+
 
 
 def get_session_dir(session_id: str) -> str:
@@ -586,6 +625,10 @@ async def chat_completions(
     try:
         result = subprocess.run(final_cmd, capture_output=True, text=True, timeout=300, shell=False)
         
+        # [New] 실행 로그 원격 저장
+        if tool_settings.get("use_session_dir", True):
+             log_remote_execution(session_dir, shell_cmd, result.returncode, result.stdout, result.stderr)
+
         if result.returncode != 0:
             logger.error(f"❌ CLI Error: {result.stderr}")
             response_text = f"[Error from {target_tool} CLI]\n{result.stderr}"
@@ -783,6 +826,10 @@ async def responses_api(
     try:
         result = subprocess.run(final_cmd, capture_output=True, text=True, timeout=300, shell=False)
         
+        # [New] 실행 로그 원격 저장
+        if tool_settings.get("use_session_dir", True):
+             log_remote_execution(session_dir, shell_cmd, result.returncode, result.stdout, result.stderr)
+
         if result.returncode != 0:
             logger.error(f"❌ CLI Error: {result.stderr}")
             response_text = f"[Error from {target_tool} CLI]\n{result.stderr}"

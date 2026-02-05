@@ -84,10 +84,10 @@ The `claude-server` container is pre-configured to use MinIO.
 - **Auto-Config**: `docker-entrypoint.sh` sets up the `aws-s3-mcp` server.
 - **Output Format**: Agents are instructed to strictly output JSON for file operations, enabling easy parsing in n8n.
 
-**Example Request:**
+### Example Request
 > "Generate a cyberpunk city image and upload it to the bucket."
 
-**Agent Response (JSON):**
+### Agent Response (JSON)
 ```json
 {
   "local_path": "/workspace/city.png",
