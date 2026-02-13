@@ -40,10 +40,15 @@ RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli @openai/codex aw
 RUN curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc && \
     chmod +x /usr/local/bin/mc
 
+# 4.6 [Fix] 빌드 시점에 권한 수정 (런타임 지연 방지)
+RUN chown -R ${SSH_USER}:${SSH_USER} /usr/local/lib/node_modules && \
+    chown -R ${SSH_USER}:${SSH_USER} /usr/local/bin
+
 # 5. UI 깨짐 방지용 터미널 설정
 ENV TERM=xterm-256color
 
 # 6. 엔트리포인트 스크립트 복사 및 실행 권한 부여
+ARG CACHEBUST=1
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

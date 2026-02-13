@@ -292,11 +292,21 @@ def check_tool_available(tool_name: str, config: dict) -> Optional[str]:
     
     try:
         full_cmd = ssh_base + version_cmd
+        # [Debug] Log exact command
+        cmd_str = " ".join(full_cmd)
+        
         result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=10)
         
         if result.returncode == 0:
             version_info = result.stdout.strip()
             return version_info.split('\n')[0] if version_info else "installed"
+        
+        # [Debug] Log failure details
+        logger.warning(f"   ⚠️ Check failed for {tool_name}")
+        logger.warning(f"      CMD: {cmd_str}")
+        logger.warning(f"      EXIT: {result.returncode}")
+        logger.warning(f"      STDOUT: {result.stdout.strip()}")
+        logger.warning(f"      STDERR: {result.stderr.strip()}")
         return None
         
     except subprocess.TimeoutExpired:
@@ -325,9 +335,36 @@ def build_model_mapping():
     SUPPORTED_MODELS = sorted(all_models)
 
 
+def wait_for_ssh(max_retries=60):
+    """SSH 서버가 준비될 때까지 대기 (Race Condition 방지)"""
+    ssh_base = get_ssh_base_cmd()
+    check_cmd = ssh_base + ["echo", "ready"]
+    
+    logger.info(f"⏳ Waiting for SSH ({SSH_USER}@{SSH_HOST})...")
+    
+    for i in range(max_retries):
+        try:
+            result = subprocess.run(check_cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                logger.info("   ✅ SSH Connection established.")
+                return True
+        except Exception:
+            pass
+            
+        time.sleep(1)
+        if i > 0 and i % 5 == 0:
+             logger.info(f"   ... waiting for SSH ({i}s)")
+             
+    logger.error("   ❌ SSH Connection timed out.")
+    return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """서버 시작 시 사용 가능한 도구 및 모델 목록 갱신"""
+    # [Fix] Wait for SSH server (prevents Connection refused on startup)
+    wait_for_ssh()
+
     logger.info("🚀 Server starting... Checking available tools...")
     global AVAILABLE_TOOLS
     

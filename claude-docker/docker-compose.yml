@@ -12,18 +12,27 @@ services:
       args:
         SSH_USER: ${BRIDGE_SSH_USER} # .env에서 가져옴
         SSH_PASS: ${BRIDGE_SSH_PASS} # .env에서 가져옴
+        CACHEBUST: ${CACHEBUST:-1}
     ports:
       - "13010:22"
     volumes:
-      - ./claude-config:/home/claudeuser/
-      - ../n8n-v2/download:/workspace
-      # [Dev] 스크립트 수정 시 빌드 없이 적용되도록 볼륨 마운트
-      - ./docker-entrypoint.sh:/usr/local/bin/docker-entrypoint.sh
-    # [Fix] 윈도우 볼륨 마운트 권한 문제 우회 + SSH 서버 실행 인자 전달
+      - ./proxy-data:/home/claudeuser/.local/share/claude
+      # [Config] 일반 설정 파일 (Codex 등) 영구 저장
+      - ./data/config:/home/claudeuser/.config
+      # [Config] Claude 설정 (기존 호환성 유지 - Nested Mount)
+      - ./claude-config:/home/claudeuser/.config/claude-code
+      - ./claude-config/ssh:/home/claudeuser/.ssh
+      # [Config] Gemini 설정 영구 저장
+      - ./data/gemini:/home/claudeuser/.gemini
+      - ./.env:/workspace/.env
+      # [Dev] 스크립트 수정 시 빌드 없이 적용되도록 볼륨 마운트 (제거됨: 권한 충돌 방지)
+      # - ./docker-entrypoint.sh:/usr/local/bin/docker-entrypoint.sh
+      # [Fix] 윈도우 볼륨 마운트 권한 문제 우회 + SSH 서버 실행 인자 전달
     entrypoint: [ "/bin/bash", "/usr/local/bin/docker-entrypoint.sh", "/usr/sbin/sshd", "-D" ]
     environment:
       - ANTHROPIC_BASE_URL=http://claude-code-monitor:3001
       - NANOBANANA_GEMINI_API_KEY=${NANOBANANA_GEMINI_API_KEY}
+      - STITCH_API_KEY=${STITCH_API_KEY}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET=${MINIO_BUCKET:-images}
@@ -52,13 +61,18 @@ services:
 
   # Claude API Bridge Server
   claude-bridge:
-    build: ./claude-bridge
+    build:
+      context: ./claude-bridge
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
     container_name: claude-bridge
     restart: always
     volumes:
       - ./claude-bridge/logs:/app/logs
       # [Dev] Python 코드 수정 시 빌드 없이 적용되도록 볼륨 마운트
       - ./claude-bridge/src/main.py:/app/main.py
+      # [Debug] 도구 확인 스크립트 마운트
+      - ./check_tools.sh:/app/check_tools.sh
     networks:
       - n8n-v2-network # 반드시 n8n과 같은 네트워크여야 함
     depends_on:

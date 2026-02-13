@@ -11,6 +11,7 @@ RUN apt-get update && \
 RUN pip install --no-cache-dir fastapi uvicorn pydantic
 
 # 3. 소스 코드 복사
+ARG CACHEBUST=1
 COPY ./src/main.py .
 
 # 4. 서버 실행 (8000번 포트)

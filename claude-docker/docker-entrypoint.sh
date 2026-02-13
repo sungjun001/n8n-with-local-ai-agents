@@ -11,6 +11,20 @@ echo "📁 Setting up /workspace directory..."
 mkdir -p /workspace
 chown $USER_NAME:$USER_NAME /workspace
 
+# [Config] 영구 저장소 권한 보장
+mkdir -p /home/$USER_NAME/.config
+mkdir -p /home/$USER_NAME/.gemini
+chown -R $USER_NAME:$USER_NAME /home/$USER_NAME/.config
+chown -R $USER_NAME:$USER_NAME /home/$USER_NAME/.gemini
+
+# [Fix] Claude CLI Auto-Update Permission Fix
+# Global NPM module ownership change to allow non-root update
+# (Moved to Dockerfile to prevent runtime hang)
+# echo "🔧 Fixing global NPM permissions for auto-update..."
+# chown -R $USER_NAME:$USER_NAME /usr/local/lib/node_modules
+# chown -R $USER_NAME:$USER_NAME /usr/local/bin
+
+
 # 시스템 전역 환경변수 설정
 echo "🔑 Setting up environment variables..."
 {
@@ -31,6 +45,10 @@ echo "🔑 Setting up environment variables..."
     echo "AWS_ENDPOINT_URL=\"https://$ENDPOINT\""
     echo "MINIO_ENDPOINT=\"$ENDPOINT\""
     echo "PRIMARY_BUCKET=\"$PRIMARY_BUCKET\""
+    # [Fix] Ensure PATH is set for non-interactive SSH sessions (which don't read .bashrc)
+    # Include native install path (~/.local/bin) and global paths
+    echo "PATH=\"/home/$USER_NAME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\""
+
 } > /tmp/environment && mv /tmp/environment /etc/environment
 
 # .bashrc 설정
@@ -45,6 +63,11 @@ fi
 set -a
 [ -f /etc/environment ] && . /etc/environment
 set +a
+
+# [Fix] Prioritize Native Claude Installation (~/.local/bin)
+# This ensures that if the user ran 'claude install', the native binary (which supports auto-updates)
+# is used instead of the global npm version.
+export PATH="/home/$USER_NAME/.local/bin:$PATH"
 
 # Change to workspace directory
 cd /workspace 2>/dev/null || true
@@ -146,6 +169,13 @@ echo "🔧 Configuring Stitch Integration..."
 echo "   Installing Gemini Stitch extension..."
 su - $USER_NAME -c "gemini extensions install https://github.com/gemini-cli-extensions/stitch" || echo "⚠️ Failed to install Gemini Stitch extension (non-fatal)"
 
+# 2. Configure Stitch API Key
+if [ -n "$STITCH_API_KEY" ]; then
+    echo "   Configuring Stitch API Key..."
+    # Prevent sed delimiter collision if key contains slashes, using | as delimiter
+    su - $USER_NAME -c "sed \"s|YOUR_API_KEY|$STITCH_API_KEY|g\" ~/.gemini/extensions/Stitch/gemini-extension-apikey.json > ~/.gemini/extensions/Stitch/gemini-extension.json" || echo "⚠️ Failed to configure Stitch API Key"
+fi
+
 # 2. Claude Code MCP
 # Fallback logic: STITCH_API_KEY -> NANOBANANA_GEMINI_API_KEY
 TARGET_STITCH_KEY="${STITCH_API_KEY:-$NANOBANANA_GEMINI_API_KEY}"
@@ -194,4 +224,19 @@ if command -v mc >/dev/null 2>&1; then
     fi
 fi
 
+# 🔧 [Fix] Ensure SSHD directory exists (Critical for SSH startup)
+# 🔧 [Fix] Ensure SSHD directory exists (Critical for SSH startup)
+if [ ! -d "/var/run/sshd" ]; then
+    echo "🔧 Creating /var/run/sshd..."
+    mkdir -p /var/run/sshd
+    chmod 0755 /var/run/sshd
+fi
+
+# 🔧 [Fix] Ensure SSH Host Keys exist (Critical for SSH startup)
+if [ ! -f "/etc/ssh/ssh_host_rsa_key" ]; then
+    echo "🔑 Generating SSH host keys..."
+    ssh-keygen -A
+fi
+
+echo "🚀 Executing command: $@"
 exec "$@"
